@@ -13,6 +13,7 @@ export function createApp() {
     cors({
       origin: (origin, cb) => {
         if (!origin) return cb(null, true);
+        if (env.CORS_ALLOW_ALL) return cb(null, true);
         if (env.CORS_ORIGINS.includes(origin)) return cb(null, true);
         return cb(null, false);
       },
