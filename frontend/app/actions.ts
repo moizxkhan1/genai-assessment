@@ -91,7 +91,7 @@ export async function generateResponsesAction(
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-    const resp = await fetch(`${baseUrl}/api/v1/labs/generate`, {
+    const resp = await fetch(`${baseUrl}/api/v1/llm/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ prompt, parameters }),
@@ -117,11 +117,11 @@ export async function generateResponsesAction(
       );
       throw new Error(friendly);
     }
-    const data = (await resp.json()) as { labId?: string; results: { response: string; metrics?: { vocabularyDiversity: number; readability: number; wordCount: number; sentiment: number } }[] };
+    const data = (await resp.json()) as { results: { text: string }[] };
     const now = Date.now();
     const responses: GenerationResult[] = (data.results || []).map((r, idx) => {
-      const text = r.response || "";
-      const metrics = r.metrics ?? evaluateResponse(text);
+      const text = r.text || "";
+      const metrics = evaluateResponse(text);
       return {
         id: `${now}-${idx}`,
         parameters: parameters[idx],
@@ -131,7 +131,7 @@ export async function generateResponsesAction(
       };
     });
 
-    return { ok: true, labId: data.labId, results: responses };
+    return { ok: true, results: responses };
   } catch (err: unknown) {
     const e = err as any;
     // AbortError indicates our client-side timeout fired

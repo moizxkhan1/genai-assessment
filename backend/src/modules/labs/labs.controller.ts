@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
-import { GenerateRequestSchema } from "../llm/dto";
+import { z } from "zod";
+import { GenerateRequestSchema, GenerationParametersSchema } from "../llm/dto";
 import { generateGemini } from "../llm/gemini.service";
 import { env } from "../../config/env";
 import { evaluateResponse } from "../metrics/metric-service";
@@ -130,5 +131,65 @@ export async function deleteLab(req: Request, res: Response) {
       error: String(err?.message || err),
     });
     return res.status(400).json({ error: "Invalid id" });
+  }
+}
+
+// Save an already-generated run without regenerating on the backend
+const MetricsSchema = z.object({
+  vocabularyDiversity: z.number(),
+  readability: z.number(),
+  wordCount: z.number(),
+  sentiment: z.number(),
+});
+
+const SaveLabSchema = z.object({
+  prompt: z.string().trim().min(1),
+  parameters: z.array(GenerationParametersSchema).min(1).max(6),
+  results: z
+    .array(
+      z.object({
+        response: z.string(),
+        metrics: MetricsSchema.partial().optional(),
+      })
+    )
+    .min(1),
+  model: z.string().optional(),
+  durationMs: z.number().int().nonnegative().optional(),
+});
+
+export async function saveLab(req: Request, res: Response) {
+  try {
+    const parsed = SaveLabSchema.safeParse(req.body);
+    if (!parsed.success)
+      return res.status(400).json({ error: parsed.error.message });
+    const { prompt, parameters, results, model, durationMs } = parsed.data;
+
+    const normalized = results.map((r) => ({
+      response: r.response,
+      metrics:
+        r.metrics &&
+        typeof r.metrics.vocabularyDiversity === "number" &&
+        typeof r.metrics.readability === "number" &&
+        typeof r.metrics.wordCount === "number" &&
+        typeof r.metrics.sentiment === "number"
+          ? (r.metrics as any)
+          : evaluateResponse(r.response),
+    }));
+
+    const lab = await createLab({
+      prompt,
+      model: model || env.MODEL_NAME,
+      parameters,
+      results: normalized,
+      createdAt: new Date(),
+      durationMs: durationMs ?? 0,
+    });
+    return res.json({ labId: String(lab._id) });
+  } catch (err: any) {
+    logger.error("labs:save:error", {
+      requestId: (req as any).requestId,
+      error: String(err?.message || err),
+    });
+    return res.status(500).json({ error: "Failed to save lab" });
   }
 }

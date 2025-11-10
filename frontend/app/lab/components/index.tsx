@@ -26,7 +26,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Sparkles } from "lucide-react";
+import { Loader2, Save, Sparkles } from "lucide-react";
 import InfoSection from "./info-section";
 
 type ActionFn = (
@@ -73,6 +73,10 @@ export default function LabView({ action }: { action: ActionFn }) {
   const [historyResults, setHistoryResults] = React.useState<
     GenerationResult[] | null
   >(null);
+  const [isSaving, setIsSaving] = React.useState(false);
+  const [savedLabId, setSavedLabId] = React.useState<string | null>(null);
+  const apiBaseUrl =
+    process.env.NEXT_PUBLIC_API_BASE_URL || process.env.BACKEND_URL;
 
   React.useEffect(() => {
     if (state && state.ok === false && state.error) {
@@ -116,7 +120,10 @@ export default function LabView({ action }: { action: ActionFn }) {
     if (isPending) setHistoryResults(null);
   }, [isPending]);
   React.useEffect(() => {
-    if (state?.results && state.results.length) setHistoryResults(null);
+    if (state?.results && state.results.length) {
+      setHistoryResults(null);
+      setSavedLabId(null);
+    }
   }, [state?.results]);
 
   async function loadLab(id: string) {
@@ -152,6 +159,43 @@ export default function LabView({ action }: { action: ActionFn }) {
       setHistoryResults(mapped);
     } catch (_) {
       // noop
+    }
+  }
+
+  async function saveCurrentRun() {
+    try {
+      if (!results.length || isSaving) return;
+      setIsSaving(true);
+      const payload = {
+        prompt,
+        parameters: paramSets.slice(0, countNum),
+        results: results.map((r) => ({
+          response: r.response,
+          metrics: r.metrics,
+        })),
+      };
+      const resp = await fetch(`${apiBaseUrl}/api/v1/labs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!resp.ok) {
+        const err = (await resp.json().catch(async () => ({
+          error: await resp.text().catch(() => "Failed to save"),
+        }))) as any;
+        throw new Error(
+          typeof err?.error === "string" ? err.error : "Failed to save"
+        );
+      }
+      const data = (await resp.json().catch(() => ({}))) as { labId?: string };
+      setSavedLabId(data.labId || "saved");
+      toast.success("Run saved successfully");
+    } catch (e: any) {
+      const msg =
+        typeof e?.message === "string" ? e.message : "Failed to save run";
+      toast.error(msg);
+    } finally {
+      setIsSaving(false);
     }
   }
 
@@ -309,9 +353,32 @@ export default function LabView({ action }: { action: ActionFn }) {
       {results.length > 0 && (
         <>
           <div className="border-t border-zinc-200 pt-6 dark:border-zinc-800">
-            <h2 className="mb-4 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
-              Generated Responses
-            </h2>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+                Generated Responses
+              </h2>
+              {(!historyResults || historyResults.length === 0) &&
+              !isPending &&
+              !savedLabId ? (
+                <Button
+                  variant="outline"
+                  onClick={() => void saveCurrentRun()}
+                  disabled={isSaving || results.length === 0 || !prompt.trim()}
+                >
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      <span>Save</span>
+                    </>
+                  )}
+                </Button>
+              ) : null}
+            </div>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
               {results.map((r, i) => (
                 <ResponseCard key={r.id} result={r} index={i} />
