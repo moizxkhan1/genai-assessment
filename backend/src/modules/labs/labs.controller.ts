@@ -3,7 +3,7 @@ import { GenerateRequestSchema } from "../llm/dto";
 import { generateGemini } from "../llm/gemini.service";
 import { env } from "../../config/env";
 import { evaluateResponse } from "../metrics/metric-service";
-import { createLab, getLabById, listLabs } from "./labs.repo";
+import { createLab, getLabById, listLabs, deleteLabById } from "./labs.repo";
 import { logger } from "../../lib/logger";
 
 async function runPool<T>(
@@ -109,6 +109,26 @@ export async function getLab(req: Request, res: Response) {
     if (!lab) return res.status(404).json({ error: "Not found" });
     return res.json(lab);
   } catch (err: any) {
+    return res.status(400).json({ error: "Invalid id" });
+  }
+}
+
+export async function deleteLab(req: Request, res: Response) {
+  try {
+    const id = req.params?.id;
+    if (!id) return res.status(400).json({ error: "Missing id parameter" });
+    const deleted = await deleteLabById(id);
+    if (!deleted) return res.status(404).json({ error: "Not found" });
+    logger.info("labs:delete:success", {
+      requestId: (req as any).requestId,
+      labId: id,
+    });
+    return res.json({ ok: true });
+  } catch (err: any) {
+    logger.error("labs:delete:error", {
+      requestId: (req as any).requestId,
+      error: String(err?.message || err),
+    });
     return res.status(400).json({ error: "Invalid id" });
   }
 }

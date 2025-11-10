@@ -26,6 +26,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Sparkles } from "lucide-react";
 
 type ActionFn = (
   prev: unknown,
@@ -75,6 +76,10 @@ export default function LabView({ action }: { action: ActionFn }) {
   React.useEffect(() => {
     if (state && state.ok === false && state.error) {
       toast.error(state.error);
+    } else if (state && state.ok && state.results && state.results.length > 0) {
+      toast.success(
+        `Generated ${state.results.length} responses successfully!`
+      );
     }
   }, [state]);
 
@@ -98,6 +103,12 @@ export default function LabView({ action }: { action: ActionFn }) {
   const first = paramSets[0] ?? makeDefaults();
 
   const disabled = isPending;
+  const formRef = React.useRef<HTMLFormElement>(null);
+
+  const handleSubmit = React.useCallback(() => {
+    if (!prompt.trim() || disabled) return;
+    formRef.current?.requestSubmit();
+  }, [prompt, disabled]);
 
   // Clear history results when starting a new generation or after fresh action results arrive
   React.useEffect(() => {
@@ -145,21 +156,27 @@ export default function LabView({ action }: { action: ActionFn }) {
 
   return (
     <div className="grid gap-6">
-      <h1 className="text-center text-2xl font-semibold">
-        LLM Parameter Explorer
-      </h1>
+      <div className="text-center">
+        <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+          LLM Parameter Explorer
+        </h1>
+        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+          Experiment with different parameters and compare model outputs
+        </p>
+      </div>
 
-      <Card>
-        <CardContent className="p-4">
-          <form action={formAction} className="grid gap-6">
+      <Card className="shadow-md">
+        <CardContent className="p-6">
+          <form ref={formRef} action={formAction} className="grid gap-6">
             {/* Prompt + History*/}
             <div className="grid grid-cols-5 gap-4">
-              <div className="col-span-5 md:col-span-3 p-4">
+              <div className="col-span-5 md:col-span-3">
                 <PromptInput
                   value={prompt}
                   onChange={setPrompt}
                   disabled={disabled}
                   className="h-64"
+                  onSubmit={handleSubmit}
                 />
               </div>
               <div className="col-span-5 md:col-span-2 h-64">
@@ -169,13 +186,19 @@ export default function LabView({ action }: { action: ActionFn }) {
 
             {/* Config below, full width */}
             <div className="grid gap-4">
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <div className="flex items-center gap-1">
-                  <Label htmlFor="count">Responses</Label>
+                  <Label htmlFor="count" className="text-sm font-semibold">
+                    Number of Responses
+                  </Label>
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <button type="button" className="inline-flex">
+                        <button
+                          type="button"
+                          className="inline-flex"
+                          aria-label="Info about response count"
+                        >
                           <InfoIcon />
                         </button>
                       </TooltipTrigger>
@@ -202,7 +225,7 @@ export default function LabView({ action }: { action: ActionFn }) {
                   }}
                   disabled={disabled}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select count" />
                   </SelectTrigger>
                   <SelectContent>
@@ -212,7 +235,7 @@ export default function LabView({ action }: { action: ActionFn }) {
                       const v = String(RANGES.count.min + i);
                       return (
                         <SelectItem key={v} value={v}>
-                          {v}
+                          {v} {Number(v) === 1 ? "Response" : "Responses"}
                         </SelectItem>
                       );
                     })}
@@ -249,16 +272,21 @@ export default function LabView({ action }: { action: ActionFn }) {
 
               <Button
                 type="submit"
-                className="w-full"
+                className="w-full !text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 shadow-lg transition-all hover:shadow-xl"
+                size="lg"
                 disabled={disabled || !prompt.trim()}
               >
                 {isPending ? (
                   <span className="inline-flex items-center gap-2">
-                    <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-zinc-200 border-t-zinc-900 dark:border-zinc-700 dark:border-t-zinc-100" />
-                    Generating {count} responses...
+                    <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-zinc-200 border-t-zinc-100" />
+                    Generating {count}{" "}
+                    {Number(count) === 1 ? "response" : "responses"}...
                   </span>
                 ) : (
-                  "Generate Responses"
+                  <span className="inline-flex items-center gap-2">
+                    <Sparkles className="h-4 w-4" />
+                    Generate Responses
+                  </span>
                 )}
               </Button>
 
@@ -270,15 +298,29 @@ export default function LabView({ action }: { action: ActionFn }) {
         </CardContent>
       </Card>
 
-      {/* Results first */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {results.map((r, i) => (
-          <ResponseCard key={r.id} result={r} index={i} />
-        ))}
-      </div>
+      {/* Results section */}
+      {results.length > 0 && (
+        <>
+          <div className="border-t border-zinc-200 pt-6 dark:border-zinc-800">
+            <h2 className="mb-4 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+              Generated Responses
+            </h2>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {results.map((r, i) => (
+                <ResponseCard key={r.id} result={r} index={i} />
+              ))}
+            </div>
+          </div>
 
-      {/* Charts below cards */}
-      {results.length ? <MetricsChart results={results} /> : null}
+          {/* Charts below cards */}
+          <div className="border-t border-zinc-200 pt-6 dark:border-zinc-800">
+            <h2 className="mb-4 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+              Metrics Comparison
+            </h2>
+            <MetricsChart results={results} />
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -29,3 +29,9 @@ export async function listLabs(limit = 20) {
     count: i.results?.length || 0,
   }));
 }
+
+export async function deleteLabById(id: string) {
+  const col = getCollection<LabDoc>(COLLECTION);
+  const result = await col.deleteOne({ _id: new ObjectId(id) });
+  return result.deletedCount > 0;
+}
