@@ -9,6 +9,7 @@ import type {
 export interface ActionResult {
   ok: boolean;
   results?: GenerationResult[];
+  labId?: string;
   error?: string;
 }
 
@@ -54,7 +55,7 @@ export async function generateResponsesAction(
     validateGenerateRequest(input);
 
     const baseUrl = process.env.BACKEND_URL || "http://localhost:4000";
-    const resp = await fetch(`${baseUrl}/api/v1/llm/generate`, {
+    const resp = await fetch(`${baseUrl}/api/v1/labs/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ prompt, parameters }),
@@ -65,20 +66,21 @@ export async function generateResponsesAction(
       const err = (await resp.json().catch(() => ({}))) as any;
       throw new Error(err?.error || `Backend error (${resp.status})`);
     }
-    const data = (await resp.json()) as { results: { text: string }[] };
+    const data = (await resp.json()) as { labId?: string; results: { response: string; metrics?: { vocabularyDiversity: number; readability: number; wordCount: number; sentiment: number } }[] };
     const now = Date.now();
     const responses: GenerationResult[] = (data.results || []).map((r, idx) => {
-      const metrics = evaluateResponse(r.text || "");
+      const text = r.response || "";
+      const metrics = r.metrics ?? evaluateResponse(text);
       return {
         id: `${now}-${idx}`,
         parameters: parameters[idx],
-        response: r.text || "",
+        response: text,
         metrics,
         generatedAt: new Date(),
       };
     });
 
-    return { ok: true, results: responses };
+    return { ok: true, labId: data.labId, results: responses };
   } catch (err: unknown) {
     const message =
       err instanceof Error ? err.message : "Failed to generate responses";

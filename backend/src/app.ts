@@ -3,10 +3,12 @@ import cors from "cors";
 import { router } from "./routes";
 import { errorHandler } from "./middleware/error";
 import { env } from "./config/env";
+import { requestLogger } from "./middleware/request-logger";
 
 export function createApp() {
   const app = express();
   app.use(express.json({ limit: "1mb" }));
+  app.use(requestLogger);
   app.use(
     cors({
       origin: (origin, cb) => {

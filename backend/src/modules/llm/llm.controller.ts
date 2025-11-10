@@ -2,8 +2,12 @@ import type { Request, Response } from "express";
 import { GenerateRequestSchema } from "./dto";
 import { generateGemini } from "./gemini.service";
 import { env } from "../../config/env";
+import { logger } from "../../lib/logger";
 
-async function runPool<T>(tasks: Array<() => Promise<T>>, concurrency = 2): Promise<T[]> {
+async function runPool<T>(
+  tasks: Array<() => Promise<T>>,
+  concurrency = 2
+): Promise<T[]> {
   const results: T[] = [];
   let i = 0;
   let active = 0;
@@ -36,17 +40,35 @@ async function runPool<T>(tasks: Array<() => Promise<T>>, concurrency = 2): Prom
 
 export async function generateHandler(req: Request, res: Response) {
   const parsed = GenerateRequestSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: parsed.error.message });
+  if (!parsed.success)
+    return res.status(400).json({ error: parsed.error.message });
   const { prompt, parameters } = parsed.data;
 
   try {
-    const tasks = parameters.map((p) => () =>
-      generateGemini(prompt, p, { timeoutMs: env.REQUEST_TIMEOUT_MS })
+    logger.info("llm:generate:start", {
+      requestId: (req as any).requestId,
+      promptLen: prompt.length,
+      variants: parameters.length,
+    });
+    const tasks = parameters.map(
+      (p) => () =>
+        generateGemini(prompt, p, { timeoutMs: env.REQUEST_TIMEOUT_MS })
     );
     const texts = await runPool(tasks, 2);
-    return res.json({ results: texts.map((text) => ({ text })) });
+    const results = texts.map((text) => ({ text }));
+    logger.info("llm:generate:done", {
+      requestId: (req as any).requestId,
+      results: results.length,
+      lengths: results.map((r) => r.text.length),
+    });
+    return res.json({ results });
   } catch (err: any) {
-    const message = typeof err?.message === "string" ? err.message : "Generation failed";
+    const message =
+      typeof err?.message === "string" ? err.message : "Generation failed";
+    logger.error("llm:generate:error", {
+      requestId: (req as any).requestId,
+      error: message,
+    });
     return res.status(502).json({ error: message });
   }
 }

@@ -1,4 +1,5 @@
 import { env } from "../../config/env";
+import { logger } from "../../lib/logger";
 
 export interface GenerateOptions {
   timeoutMs?: number;
@@ -23,7 +24,8 @@ function sleep(ms: number) {
 }
 
 async function getClient() {
-  if (!env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not set on backend");
+  if (!env.GEMINI_API_KEY)
+    throw new Error("GEMINI_API_KEY is not set on backend");
   const mod = await import("@google/generative-ai");
   const { GoogleGenerativeAI } = mod as any;
   return new GoogleGenerativeAI(env.GEMINI_API_KEY);
@@ -31,17 +33,31 @@ async function getClient() {
 
 export async function generateGemini(
   prompt: string,
-  params: { temperature: number; topP: number; topK: number; maxOutputTokens: number },
+  params: {
+    temperature: number;
+    topP: number;
+    topK: number;
+    maxOutputTokens: number;
+  },
   options?: GenerateOptions
 ): Promise<string> {
+  const startedAt = Date.now();
+  logger.debug("gemini:start", {
+    model: options?.modelName || env.MODEL_NAME,
+    promptLen: prompt.length,
+    params,
+  });
   const client = await getClient();
-  const model = client.getGenerativeModel({ model: options?.modelName || env.MODEL_NAME });
+  const model = client.getGenerativeModel({
+    model: options?.modelName || env.MODEL_NAME,
+  });
 
   const timeoutMs = options?.timeoutMs ?? env.REQUEST_TIMEOUT_MS;
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), timeoutMs);
 
   const attempt = async () => {
+    const attemptStart = Date.now();
     const result = await model.generateContent(
       {
         contents: [{ role: "user", parts: [{ text: prompt }] }],
@@ -54,7 +70,12 @@ export async function generateGemini(
       },
       { signal: controller.signal }
     );
-    return result.response.text() ?? "";
+    const text = result.response.text() ?? "";
+    logger.debug("gemini:attempt:success", {
+      durationMs: Date.now() - attemptStart,
+      textLen: text.length,
+    });
+    return text;
   };
 
   try {
@@ -65,6 +86,11 @@ export async function generateGemini(
         return await attempt();
       } catch (err: any) {
         if (i >= maxAttempts || !isRetryableError(err)) throw err;
+        logger.warn("gemini:attempt:retry", {
+          attempt: i,
+          delayMs: delay,
+          error: String(err?.message || err),
+        });
         const jitter = Math.floor(Math.random() * 250);
         await sleep(delay + jitter);
         delay = Math.min(delay * 2, 4000);
@@ -73,5 +99,6 @@ export async function generateGemini(
     return "";
   } finally {
     clearTimeout(t);
+    logger.info("gemini:done", { durationMs: Date.now() - startedAt });
   }
 }

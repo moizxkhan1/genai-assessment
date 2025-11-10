@@ -9,6 +9,11 @@ const EnvSchema = z.object({
   MODEL_NAME: z.string().default("gemini-2.0-flash"),
   CORS_ORIGIN: z.string().optional(),
   REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().optional(),
+  MONGO_URI: z.string().url().optional(),
+  LOG_LEVEL: z.enum(["debug", "info", "warn", "error", "silent"]).optional(),
+  LOG_PRETTY: z
+    .union([z.string().transform((v) => v === "true"), z.boolean()])
+    .optional(),
 });
 
 const parsed = EnvSchema.safeParse(process.env);
@@ -30,4 +35,7 @@ export const env = {
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean),
+  MONGO_URI: raw.MONGO_URI,
+  LOG_LEVEL: raw.LOG_LEVEL || "info",
+  LOG_PRETTY: Boolean(raw.LOG_PRETTY),
 } as const;

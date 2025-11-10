@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import ResponseParamsCard from "./response-params-card";
 import TokenBar from "./token-bar";
+import HistoryPanel from "./history-panel";
 import {
   Select,
   SelectContent,
@@ -58,8 +59,8 @@ export default function LabView({ action }: { action: ActionFn }) {
     topK: DEFAULTS.topK,
     maxOutputTokens: DEFAULTS.maxOutputTokens,
   });
-  const [paramSets, setParamSets] = React.useState<GenerationParameters[]>(
-    () => Array.from({ length: DEFAULTS.count }, () => makeDefaults())
+  const [paramSets, setParamSets] = React.useState<GenerationParameters[]>(() =>
+    Array.from({ length: DEFAULTS.count }, () => makeDefaults())
   );
 
   const [state, formAction, isPending] = useActionState(action, {
@@ -67,6 +68,9 @@ export default function LabView({ action }: { action: ActionFn }) {
     results: [],
   });
   const [progress, setProgress] = React.useState(0);
+  const [historyResults, setHistoryResults] = React.useState<
+    GenerationResult[] | null
+  >(null);
 
   React.useEffect(() => {
     if (state && state.ok === false && state.error) {
@@ -86,11 +90,58 @@ export default function LabView({ action }: { action: ActionFn }) {
     return () => clearInterval(id);
   }, [isPending]);
 
-  const results = (state?.results as GenerationResult[]) || [];
+  const results =
+    historyResults && historyResults.length
+      ? historyResults
+      : (state?.results as GenerationResult[]) || [];
   const countNum = Number(count) || DEFAULTS.count;
   const first = paramSets[0] ?? makeDefaults();
 
   const disabled = isPending;
+
+  // Clear history results when starting a new generation or after fresh action results arrive
+  React.useEffect(() => {
+    if (isPending) setHistoryResults(null);
+  }, [isPending]);
+  React.useEffect(() => {
+    if (state?.results && state.results.length) setHistoryResults(null);
+  }, [state?.results]);
+
+  async function loadLab(id: string) {
+    try {
+      const baseUrl =
+        process.env.NEXT_PUBLIC_API_BASE_URL ||
+        process.env.BACKEND_URL ||
+        "http://localhost:4000";
+      const resp = await fetch(`${baseUrl}/api/v1/labs/${id}`, {
+        cache: "no-store",
+      });
+      if (!resp.ok) return;
+      const lab = await resp.json();
+      const params = (lab.parameters || []) as GenerationParameters[];
+      setParamSets(params);
+      setCount(String(params.length || DEFAULTS.count));
+      setPrompt(lab.prompt || "");
+      const now = Date.now();
+      const mapped: GenerationResult[] = (lab.results || []).map(
+        (r: any, idx: number) => ({
+          id: `${now}-${idx}`,
+          parameters: params[idx] || makeDefaults(),
+          response: r.response || "",
+          metrics: r.metrics || {
+            vocabularyDiversity: 0,
+            readability: 0,
+            wordCount: 0,
+            sentiment: 0,
+          },
+          generatedAt: lab.createdAt ? new Date(lab.createdAt) : new Date(),
+        })
+      );
+      setHistoryResults(mapped);
+    } catch (_) {
+      // noop
+    }
+  }
 
   return (
     <div className="grid gap-6">
@@ -101,13 +152,19 @@ export default function LabView({ action }: { action: ActionFn }) {
       <Card>
         <CardContent className="p-4">
           <form action={formAction} className="grid gap-6">
-            {/* Prompt on top, full width */}
-            <div>
-              <PromptInput
-                value={prompt}
-                onChange={setPrompt}
-                disabled={disabled}
-              />
+            {/* Prompt + History*/}
+            <div className="grid grid-cols-5 gap-4">
+              <div className="col-span-5 md:col-span-3 p-4">
+                <PromptInput
+                  value={prompt}
+                  onChange={setPrompt}
+                  disabled={disabled}
+                  className="h-64"
+                />
+              </div>
+              <div className="col-span-5 md:col-span-2 h-64">
+                <HistoryPanel onSelect={(id) => void loadLab(id)} />
+              </div>
             </div>
 
             {/* Config below, full width */}
