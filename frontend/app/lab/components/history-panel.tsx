@@ -148,6 +148,7 @@ export default function HistoryPanel({
                         </div>
                       </button>
                       <button
+                        type="button"
                         onClick={(e) => void handleDeleteClick(it, e)}
                         disabled={deleting === it.id}
                         className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1.5 opacity-0 transition-all hover:bg-red-100 hover:text-red-600 group-hover:opacity-100 disabled:opacity-50 dark:hover:bg-red-900/20 dark:hover:text-red-400"

@@ -166,90 +166,91 @@ export default function LabView({ action }: { action: ActionFn }) {
         </p>
       </div>
 
-      <InfoSection />
-
-      <Card className="shadow-md">
+      <Card className="shadow-md border-none">
+        <div className="p-6">
+          <InfoSection />
+        </div>
         <CardContent className="p-6">
           <form ref={formRef} action={formAction} className="grid gap-6">
-            {/* Prompt + History in aligned grid */}
+            {/* Prompt + Number of Responses | History in aligned grid */}
             <div className="grid gap-4 lg:grid-cols-2">
+              <Card className="border-zinc-200 dark:border-zinc-800 shadow-sm">
+                <CardContent className="flex flex-col justify-between p-6 space-y-4 h-full">
+                  <PromptInput
+                    value={prompt}
+                    onChange={setPrompt}
+                    disabled={disabled}
+                    className="h-64"
+                    onSubmit={handleSubmit}
+                  />
+
+                  <div className="space-y-3 pt-2">
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="count" className="text-sm font-semibold">
+                        Number of Responses
+                      </Label>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              className="inline-flex"
+                              aria-label="Info about response count"
+                            >
+                              <InfoIcon />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            How many responses to generate
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                    <Select
+                      value={count}
+                      onValueChange={(v) => {
+                        setCount(v);
+                        const nextN = Number(v) || DEFAULTS.count;
+                        setParamSets((prev) => {
+                          if (nextN === prev.length) return prev;
+                          if (nextN < prev.length) return prev.slice(0, nextN);
+                          const toAdd = nextN - prev.length;
+                          const seed = prev[prev.length - 1] ?? makeDefaults();
+                          return prev.concat(
+                            Array.from({ length: toAdd }, () => ({ ...seed }))
+                          );
+                        });
+                      }}
+                      disabled={disabled}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select count" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from({
+                          length: RANGES.count.max - RANGES.count.min + 1,
+                        }).map((_, i) => {
+                          const v = String(RANGES.count.min + i);
+                          return (
+                            <SelectItem key={v} value={v}>
+                              {v} {Number(v) === 1 ? "Response" : "Responses"}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                    <input type="hidden" name="count" value={count} />
+                  </div>
+                </CardContent>
+              </Card>
+
               <div>
-                <PromptInput
-                  value={prompt}
-                  onChange={setPrompt}
-                  disabled={disabled}
-                  className="h-64"
-                  onSubmit={handleSubmit}
-                />
-              </div>
-              <div className="h-[340px]">
                 <HistoryPanel onSelect={(id) => void loadLab(id)} />
               </div>
             </div>
 
-            {/* Config below, with responses selector inline */}
+            {/* Config below */}
             <div className="grid gap-4">
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <Label
-                    htmlFor="count"
-                    className="text-sm font-semibold whitespace-nowrap"
-                  >
-                    Number of Responses
-                  </Label>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          type="button"
-                          className="inline-flex"
-                          aria-label="Info about response count"
-                        >
-                          <InfoIcon />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        How many responses to generate
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </div>
-                <Select
-                  value={count}
-                  onValueChange={(v) => {
-                    setCount(v);
-                    const nextN = Number(v) || DEFAULTS.count;
-                    setParamSets((prev) => {
-                      if (nextN === prev.length) return prev;
-                      if (nextN < prev.length) return prev.slice(0, nextN);
-                      const toAdd = nextN - prev.length;
-                      const seed = prev[prev.length - 1] ?? makeDefaults();
-                      return prev.concat(
-                        Array.from({ length: toAdd }, () => ({ ...seed }))
-                      );
-                    });
-                  }}
-                  disabled={disabled}
-                >
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Select count" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Array.from({
-                      length: RANGES.count.max - RANGES.count.min + 1,
-                    }).map((_, i) => {
-                      const v = String(RANGES.count.min + i);
-                      return (
-                        <SelectItem key={v} value={v}>
-                          {v} {Number(v) === 1 ? "Response" : "Responses"}
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
-                <input type="hidden" name="count" value={count} />
-              </div>
-
               {/* Per-response parameter cards */}
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {paramSets.slice(0, countNum).map((ps, i) => (
