@@ -27,6 +27,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Sparkles } from "lucide-react";
+import InfoSection from "./info-section";
 
 type ActionFn = (
   prev: unknown,
@@ -165,12 +166,14 @@ export default function LabView({ action }: { action: ActionFn }) {
         </p>
       </div>
 
+      <InfoSection />
+
       <Card className="shadow-md">
         <CardContent className="p-6">
           <form ref={formRef} action={formAction} className="grid gap-6">
-            {/* Prompt + History*/}
-            <div className="grid grid-cols-5 gap-4">
-              <div className="col-span-5 md:col-span-3">
+            {/* Prompt + History in aligned grid */}
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div>
                 <PromptInput
                   value={prompt}
                   onChange={setPrompt}
@@ -179,16 +182,19 @@ export default function LabView({ action }: { action: ActionFn }) {
                   onSubmit={handleSubmit}
                 />
               </div>
-              <div className="col-span-5 md:col-span-2 h-64">
+              <div className="h-[340px]">
                 <HistoryPanel onSelect={(id) => void loadLab(id)} />
               </div>
             </div>
 
-            {/* Config below, full width */}
+            {/* Config below, with responses selector inline */}
             <div className="grid gap-4">
-              <div className="space-y-3">
-                <div className="flex items-center gap-1">
-                  <Label htmlFor="count" className="text-sm font-semibold">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <Label
+                    htmlFor="count"
+                    className="text-sm font-semibold whitespace-nowrap"
+                  >
                     Number of Responses
                   </Label>
                   <TooltipProvider>
@@ -225,7 +231,7 @@ export default function LabView({ action }: { action: ActionFn }) {
                   }}
                   disabled={disabled}
                 >
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger className="w-[180px]">
                     <SelectValue placeholder="Select count" />
                   </SelectTrigger>
                   <SelectContent>
